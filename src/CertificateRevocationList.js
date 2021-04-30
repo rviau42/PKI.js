@@ -6,6 +6,8 @@ import RelativeDistinguishedNames from "./RelativeDistinguishedNames.js";
 import Time from "./Time.js";
 import RevokedCertificate from "./RevokedCertificate.js";
 import Extensions from "./Extensions.js";
+import Certificate from "./Certificate.js";
+import { Enumerated } from "asn1js";
 //**************************************************************************************
 function tbsCertList(parameters = {}) {
 	//TBSCertList  ::=  SEQUENCE  {
@@ -394,6 +396,12 @@ export default class CertificateRevocationList {
 		return object;
 	}
 	//**********************************************************************************
+	/**
+	 * Checks if a certificate is revoked
+	 * @param {Certificate} certificate 
+	 * 
+  	 * @returns {boolean|Enumerated} Returns false if certificate not revoked, Returns its revocation reason if revoked
+	 */
 	isCertificateRevoked(certificate) {
 		// Get Indication if it is declared as CRL Indirect
 		let isIndirect = this.crlExtensions?.extensions?.some(({ extnID, parsedValue }) => extnID === "2.5.29.28" && !!parsedValue.indirectCRL)
@@ -426,8 +434,12 @@ export default class CertificateRevocationList {
 			}
 
 			if (revokedCertificate.userCertificate.isEqual(certificate.serialNumber) &&
-				(!isIndirect || certificate.issuer.isEqual(revokedIssuer)))
-				return true;
+				(!isIndirect || certificate.issuer.isEqual(revokedIssuer))) {
+				// Revoked Certificate could contain the CRL Entry Extension "Reason" (2.5.29.21)
+				// If no Reason extension, by default, Value: 0 (unspecified) 
+				return (revokedCertificate.crlEntryExtensions?.extensions?.find(({ extnID }) => extnID === "2.5.29.21") || {}).parsedValue
+					|| new asn1js.Enumerated({ value: 0 })
+			}
 		}
 		//endregion
 
